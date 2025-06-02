@@ -1,129 +1,143 @@
 <script>
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import Ball from './Ball.vue'
+import Boss from './Boss.vue'
+import Weapon from './Weapon.vue'
+import AmmoDisplay from './AmmoDisplay.vue'
+
 export default {
   name: 'GameCanvas',
-  data() {
-    return {
-      fixedPositions: [240, 400, 560, 880, 1040, 1200],
-      occupiedPositions: Array(6).fill(false),
-      balls: [],
-      ballIdCounter: 0,
-      bossPosition: 720,
-      bossVisible: true,
-      ammo: 6,
-      maxAmmo: 6,
-      reloading: false,
-      weaponAngle: 0
+  components: {
+    Ball,
+    Boss,
+    Weapon,
+    AmmoDisplay
+  },
+  setup() {
+    // Dados reativos
+    const fixedPositions = [240, 400, 560, 880, 1040, 1200]
+    const occupiedPositions = ref(new Array(6).fill(false))
+    const balls = ref([])
+    const ballIdCounter = ref(0)
+    const bossVisible = ref(true)
+    const ammo = ref(6)
+    const maxAmmo = 6
+    const reloading = ref(false)
+    const ballInterval = ref(null)
+    const ballCreationTimeout = ref(null)
+
+    // Métodos
+    const setupEventListeners = () => {
+      document.addEventListener('keydown', handleKeyDown)
     }
-  },
-  computed: {
-    bossStyle() {
-      return {
-        left: `${this.bossPosition - 50}px`,
-        top: '250px'
-      }
-    },
-    weaponStyle() {
-      return {
-        bottom: '0',
-        left: '50%',
-        transform: 'translateX(-50%) rotate(0deg)'
-      }
+
+    const startBallCreationInterval = () => {
+      ballInterval.value = setInterval(() => {
+        createBall()
+      }, 1500)
     }
-  },
-  mounted() {
-    this.createBall();
-    this.setupEventListeners();
-    this.startBallCreationInterval();
-  },
-  beforeDestroy() {
-    this.clearIntervals();
-  },
-  methods: {
-    setupEventListeners() {
-      document.addEventListener('keydown', this.handleKeyDown);
-    },
-    startBallCreationInterval() {
-      this.ballInterval = setInterval(() => {
-        this.createBall();
-      }, 1500);
-      
-      this.ballCreationTimeout = setTimeout(() => {
-        this.startBallCreationInterval();
-      }, Math.random() * 1000 + 500);
-    },
-    clearIntervals() {
-      clearInterval(this.ballInterval);
-      clearTimeout(this.ballCreationTimeout);
-      this.balls.forEach(ball => {
-        clearTimeout(ball.removalTimeout);
-      });
-    },
-    createBall() {
-      const availablePositions = this.occupiedPositions
+
+    const clearIntervals = () => {
+      clearInterval(ballInterval.value)
+      clearTimeout(ballCreationTimeout.value)
+      balls.value.forEach(ball => {
+        clearTimeout(ball.removalTimeout)
+      })
+    }
+
+    const createBall = () => {
+      const availableIndices = occupiedPositions.value
         .map((occupied, index) => (!occupied ? index : null))
-        .filter(index => index !== null);
-      
-      if (availablePositions.length === 0) {
-        return;
+        .filter(index => index !== null)
+
+      if (availableIndices.length === 0) {
+        ballCreationTimeout.value = setTimeout(createBall, 200)
+        return
       }
+
+      const randomIndex = Math.floor(Math.random() * availableIndices.length)
+      const positionIndex = availableIndices[randomIndex]
       
-      const positionIndex = availablePositions[Math.floor(Math.random() * availablePositions.length)];
-      this.occupiedPositions[positionIndex] = true;
-      
-      const ballId = this.ballIdCounter++;
+      // Atualização reativa sem $set
+      occupiedPositions.value[positionIndex] = true
+
       const newBall = {
-        id: ballId,
+        id: ballIdCounter.value++,
         positionIndex,
-        envelopeStyle: {
-          left: `${this.fixedPositions[positionIndex] - 25}px`,
-          top: '300px'
-        }
-      };
-      
-      // Auto-removal after 4 seconds
-      newBall.removalTimeout = setTimeout(() => {
-        this.removeBall(ballId);
-      }, 4000);
-      
-      this.balls.push(newBall);
-    },
-    removeBall(ballId) {
-      const ballIndex = this.balls.findIndex(b => b.id === ballId);
-      if (ballIndex === -1) return;
-      
-      const ball = this.balls[ballIndex];
-      this.occupiedPositions[ball.positionIndex] = false;
-      this.balls.splice(ballIndex, 1);
-      clearTimeout(ball.removalTimeout);
-    },
-    handleBallClick(ballIndex) {
-      if (!this.shoot()) return;
-      
-      const ball = this.balls[ballIndex];
-      this.removeBall(ball.id);
-    },
-    handleCanvasClick() {
-      this.shoot();
-    },
-    shoot() {
-      if (this.reloading || this.ammo <= 0) {
-        return false;
+        removalTimeout: setTimeout(() => {
+          removeBall(ballIdCounter.value - 1)
+        }, 4000)
       }
-      
-      this.ammo--;
-      return true;
-    },
-    handleKeyDown(event) {
-      if (event.key === 'r' && !this.reloading && this.ammo < this.maxAmmo) {
-        this.reload();
+
+      balls.value.push(newBall)
+
+      const delay = Math.random() * 1000 + 500
+      ballCreationTimeout.value = setTimeout(createBall, delay)
+    }
+
+    const removeBall = (ballId) => {
+      const ballIndex = balls.value.findIndex(b => b.id === ballId)
+      if (ballIndex === -1) return
+
+      const ball = balls.value[ballIndex]
+      occupiedPositions.value[ball.positionIndex] = false
+      clearTimeout(ball.removalTimeout)
+      balls.value.splice(ballIndex, 1)
+    }
+
+    const handleBallClick = (ballId) => {
+      if (!shoot()) return
+      removeBall(ballId)
+    }
+
+    const handleCanvasClick = () => {
+      shoot()
+    }
+
+    const shoot = () => {
+      if (reloading.value || ammo.value <= 0) {
+        return false
       }
-    },
-    reload() {
-      this.reloading = true;
+      ammo.value--
+      return true
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'r' && !reloading.value && ammo.value < maxAmmo) {
+        reload()
+      }
+    }
+
+    const reload = () => {
+      reloading.value = true
       setTimeout(() => {
-        this.ammo = this.maxAmmo;
-        this.reloading = false;
-      }, 500);
+        ammo.value = maxAmmo
+        reloading.value = false
+      }, 500)
+    }
+
+    // Lifecycle hooks
+    onMounted(() => {
+      occupiedPositions.value = new Array(fixedPositions.length).fill(false)
+      createBall()
+      setupEventListeners()
+      startBallCreationInterval()
+    })
+
+    onBeforeUnmount(() => {
+      clearIntervals()
+      document.removeEventListener('keydown', handleKeyDown)
+    })
+
+    // Expor para o template
+    return {
+      fixedPositions,
+      balls,
+      bossVisible,
+      ammo,
+      maxAmmo,
+      handleBallClick,
+      handleCanvasClick
     }
   }
 }
@@ -131,46 +145,21 @@ export default {
 
 <template>
   <div class="game-container">
-    <div 
-      id="canvas" 
-      ref="canvas"
-      @click="handleCanvasClick"
-    >
-      <div id="municao">
-        <span 
-          v-for="(bullet, index) in maxAmmo" 
-          :key="index"
-          class="bala"
-          :class="{ 'apagada': index >= ammo }"
-        >⏺︎</span>
-      </div>
+    <div id="canvas" ref="canvas" @click="handleCanvasClick">
+      <AmmoDisplay :ammo="ammo" :maxAmmo="maxAmmo" />
+      <Boss v-if="bossVisible" />
+      <Weapon @weapon-clicked="shoot" />
       
-      <div 
-        v-if="bossVisible"
-        class="boss"
-        :style="bossStyle"
-      ></div>
-      
-      <div 
-        class="arma"
-        :style="weaponStyle"
-      ></div>
-      
-      <div 
-        v-for="(ball, index) in balls" 
+      <Ball
+        v-for="ball in balls"
         :key="ball.id"
-        class="ball-envelope"
-        :style="ball.envelopeStyle"
-        @click.stop="handleBallClick(index)"
-      >
-        <div class="circulo"></div>
-        <div class="bola"></div>
-      </div>
+        :position-x="fixedPositions[ball.positionIndex]"
+        :id="ball.id"
+        @ball-clicked="handleBallClick"
+      />
     </div>
   </div>
 </template>
-
-
 
 <style scoped>
 #canvas {
@@ -179,93 +168,23 @@ export default {
   height: 600px;
   border: 2px solid #333;
   background-image: url("imagens/teste.png");
-  background-size: cover; 
+  background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  overflow: hidden; /* Adicionado para conter as bolas */
+}
+
+/* Adicione estas novas regras */
+.ball-container {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .ball-envelope {
   position: absolute;
-}
-
-.bola {
-  background-color: red;
-  transform-origin: center;
-  animation: growAndFade 4s ease-out forwards;
-}
-
-.circulo {
-  border: 1px solid white;
-  transform: translate(0%, 0%);
-  animation: fadeIn 5s ease-out forwards;
-}
-
-.circulo, .bola {
-  position: absolute;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-}
-
-.boss {
-  position: absolute;
-  width: 100px;
-  height: 100px;
-  background-color: blue;
-  border-radius: 50%;
-}
-
-.arma {
-  position: absolute;
-  width: 500px;
-  height: 200px;
-  bottom: 0;
-  left: 50%;
-  transform-origin: center bottom;
-  transform: translateX(-50%) rotate(0deg);
-  transition: transform 0.05s linear;
-  background-image: url("imagens/personagem.png");
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-}
-
-#municao {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  display: flex;
-  gap: 8px;
-  z-index: 10;
-}
-
-.bala {
-  font-size: 28px;
-  color: white;
-  transition: opacity 0.2s ease;
-}
-
-.bala.apagada {
-  opacity: 0.2;
-}
-
-@keyframes fadeIn {
-  0% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes growAndFade {
-  0% {
-    transform: scale(0);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0;
-  }
+  transform: translate(-50%, -50%); /* Centraliza a bola na posição */
+  pointer-events: auto; /* Permite interação com a bola */
 }
 </style>
