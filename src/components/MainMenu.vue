@@ -34,7 +34,7 @@ export default {
 </script>
 
 <style scoped>
-/* Estilo IDÊNTICO ao original */
+
 .overlay {
   display: flex;
   flex-direction: column;

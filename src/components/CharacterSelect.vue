@@ -45,7 +45,7 @@ export default {
 </script>
 
 <style scoped>
-/* Estilo IDÊNTICO ao original */
+
 .overlay.container {
   display: flex;
   flex-direction: column;
