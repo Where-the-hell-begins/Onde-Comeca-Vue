@@ -1,5 +1,4 @@
-import './assets/main.css'
-
+// Versão correta para Vue 3
 import { createApp } from 'vue'
 import App from './App.vue'
 
