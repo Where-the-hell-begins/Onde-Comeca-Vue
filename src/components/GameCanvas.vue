@@ -129,7 +129,6 @@ export default {
       document.removeEventListener('keydown', handleKeyDown)
     })
 
-    // Expor para o template
     return {
       fixedPositions,
       balls,
@@ -149,7 +148,6 @@ export default {
       <AmmoDisplay :ammo="ammo" :maxAmmo="maxAmmo" />
       <Boss v-if="bossVisible" />
       <Weapon @weapon-clicked="shoot" />
-      
       <Ball
         v-for="ball in balls"
         :key="ball.id"
